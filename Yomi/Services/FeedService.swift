@@ -156,10 +156,20 @@ final class FeedService {
 
     func addFeed(url: String, category: String, context: ModelContext) async throws -> Feed {
         let normalizedURL = url.hasPrefix("http") ? url : "https://\(url)"
-        let parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
+
+        var feedURL = normalizedURL
+        var parsed: ParsedFeed
+        do {
+            parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
+        } catch {
+            guard let pageURL = URL(string: normalizedURL) else { throw error }
+            let discoveredURL = try await FeedDiscoveryService.shared.discoverFeedURL(from: pageURL)
+            feedURL = discoveredURL
+            parsed = try await RSSFetcher.shared.fetch(url: discoveredURL)
+        }
 
         let feed = Feed(
-            url: normalizedURL,
+            url: feedURL,
             title: parsed.title.isEmpty ? normalizedURL : parsed.title,
             siteURL: parsed.siteURL,
             category: category
