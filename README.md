@@ -22,8 +22,8 @@ The name comes from 読み (*yomi*), Japanese for "reading".
 
 ## Links
 
-- [Website](https://shakshi3104.github.io/yomy/)
-- [Privacy Policy](https://shakshi3104.github.io/yomy/privacy.html)
+- [Website](https://shakshi3104.github.io/apps/yomy/)
+- [Privacy Policy](https://shakshi3104.github.io/apps/yomy/privacy/)
 
 ## Acknowledgements
 
