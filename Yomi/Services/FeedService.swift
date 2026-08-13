@@ -156,10 +156,28 @@ final class FeedService {
 
     func addFeed(url: String, category: String, context: ModelContext) async throws -> Feed {
         let normalizedURL = url.hasPrefix("http") ? url : "https://\(url)"
-        let parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
+
+        var feedURL = normalizedURL
+        var parsed: ParsedFeed
+        do {
+            parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
+        } catch {
+            // The input may be a plain domain rather than a feed URL — try to
+            // discover the feed from the page it points at.
+            guard let pageURL = URL(string: normalizedURL) else { throw error }
+            do {
+                let discovered = try await FeedDiscoveryService.shared.discoverFeed(from: pageURL)
+                feedURL = discovered.url
+                parsed = discovered.parsed
+            } catch FeedDiscoveryError.pageUnreachable {
+                // The host never answered, so the original failure — usually a
+                // network error — describes the problem better than "no feed found".
+                throw error
+            }
+        }
 
         let feed = Feed(
-            url: normalizedURL,
+            url: feedURL,
             title: parsed.title.isEmpty ? normalizedURL : parsed.title,
             siteURL: parsed.siteURL,
             category: category
