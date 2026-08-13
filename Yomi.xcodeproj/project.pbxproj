@@ -29,6 +29,7 @@
 		57EAF15BE734A7D67BB496DE /* FeedKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB2E65ADE6687995FDB9CB62 /* FeedKit */; };
 		5BF9E1C1C2FAB59E69D994CE /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B40C3E7AF40BA6D4AB98D570 /* WidgetKit.framework */; };
 		648F66F2D726C3D49EFF094D /* OGImageFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24BC3432A4FFC1E775E48CE8 /* OGImageFetcher.swift */; };
+		6A1F3C9D45E7B208611C4D3F /* FeedDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B2E4D0A56F8C319722D5E4A /* FeedDiscoveryService.swift */; };
 		6CA182C75F92DA060B01950F /* FeedRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C9DDDCEA40E5FFCBF658213 /* FeedRowView.swift */; };
 		76EA96E43E6EE8B3398D9227 /* FeedManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FA4A2CA4B72E7996734DCE5 /* FeedManageView.swift */; };
 		8117032E657135F335027889 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1FAF476B012BC57218C70E /* CachedAsyncImage.swift */; };
@@ -81,6 +82,7 @@
 		06F88F9C98C7F0B234D8DB16 /* OPMLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OPMLManager.swift; sourceTree = "<group>"; };
 		1E1683BA11F1C5441D0587A5 /* YomiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomiApp.swift; sourceTree = "<group>"; };
 		24BC3432A4FFC1E775E48CE8 /* OGImageFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OGImageFetcher.swift; sourceTree = "<group>"; };
+		7B2E4D0A56F8C319722D5E4A /* FeedDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedDiscoveryService.swift; sourceTree = "<group>"; };
 		3300F53E6DB33DAC09AC1EF9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3B5D01EC8ADF85FD2BD4C6D6 /* Article.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Article.swift; sourceTree = "<group>"; };
 		4731ABBA770650273E328968 /* YomiWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YomiWidget.swift; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 		6B6F532D3549527645126425 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				7B2E4D0A56F8C319722D5E4A /* FeedDiscoveryService.swift */,
 				58E58EE73138EA0491E1F1D4 /* FeedService.swift */,
 				24BC3432A4FFC1E775E48CE8 /* OGImageFetcher.swift */,
 				06F88F9C98C7F0B234D8DB16 /* OPMLManager.swift */,
@@ -458,6 +461,7 @@
 				CE696972B86ADC6341971F3F /* FeedDetailView.swift in Sources */,
 				76EA96E43E6EE8B3398D9227 /* FeedManageView.swift in Sources */,
 				6CA182C75F92DA060B01950F /* FeedRowView.swift in Sources */,
+				6A1F3C9D45E7B208611C4D3F /* FeedDiscoveryService.swift in Sources */,
 				4F085C878D36E7C93B399394 /* FeedService.swift in Sources */,
 				20A5663EA9AB19AC7FDF2DE0 /* FeedsView.swift in Sources */,
 				4B4EEBC63BAFFD07CC326D43 /* LatestView.swift in Sources */,

@@ -162,10 +162,18 @@ final class FeedService {
         do {
             parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
         } catch {
+            // The input may be a plain domain rather than a feed URL — try to
+            // discover the feed from the page it points at.
             guard let pageURL = URL(string: normalizedURL) else { throw error }
-            let discoveredURL = try await FeedDiscoveryService.shared.discoverFeedURL(from: pageURL)
-            feedURL = discoveredURL
-            parsed = try await RSSFetcher.shared.fetch(url: discoveredURL)
+            do {
+                let discovered = try await FeedDiscoveryService.shared.discoverFeed(from: pageURL)
+                feedURL = discovered.url
+                parsed = discovered.parsed
+            } catch FeedDiscoveryError.pageUnreachable {
+                // The host never answered, so the original failure — usually a
+                // network error — describes the problem better than "no feed found".
+                throw error
+            }
         }
 
         let feed = Feed(
