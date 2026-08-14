@@ -50,21 +50,11 @@ struct ArticleWebView: View {
 
                 Spacer()
 
-                // Share / open the page currently on screen, not always the
-                // original article — the user may have followed links inside the
-                // WebView.
+                // Share the page currently on screen, not always the original
+                // article — the user may have followed links inside the WebView.
                 if let url = navigator.currentURL ?? URL(string: article.url) {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
-                    }
-
-                    // Open in the user's default browser. `openURL` routes http/https
-                    // through whichever browser the user has set as default (iOS 14+),
-                    // so this respects Safari/Chrome/etc. rather than forcing Safari.
-                    Button {
-                        openURL(url)
-                    } label: {
-                        Image(systemName: "safari")
                     }
                 }
 
@@ -72,6 +62,17 @@ struct ArticleWebView: View {
                     navigator.reload()
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                }
+
+                // Open in the user's default browser. `openURL` routes http/https
+                // through whichever browser the user has set as default (iOS 14+),
+                // so this respects Safari/Chrome/etc. rather than forcing Safari.
+                if let url = navigator.currentURL ?? URL(string: article.url) {
+                    Button {
+                        openURL(url)
+                    } label: {
+                        Image(systemName: "safari")
+                    }
                 }
             }
         }
