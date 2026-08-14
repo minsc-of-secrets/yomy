@@ -5,6 +5,7 @@ struct ArticleWebView: View {
     let article: Article
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     @State private var navigator = WebViewNavigator()
 
@@ -49,11 +50,21 @@ struct ArticleWebView: View {
 
                 Spacer()
 
-                // Share the page currently on screen, not always the original
-                // article — the user may have followed links inside the WebView.
+                // Share / open the page currently on screen, not always the
+                // original article — the user may have followed links inside the
+                // WebView.
                 if let url = navigator.currentURL ?? URL(string: article.url) {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
+                    }
+
+                    // Open in the user's default browser. `openURL` routes http/https
+                    // through whichever browser the user has set as default (iOS 14+),
+                    // so this respects Safari/Chrome/etc. rather than forcing Safari.
+                    Button {
+                        openURL(url)
+                    } label: {
+                        Image(systemName: "safari")
                     }
                 }
 
