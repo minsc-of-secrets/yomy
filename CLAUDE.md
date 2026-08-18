@@ -65,6 +65,24 @@ xcodebuild -project Yomi.xcodeproj -scheme Yomi clean
 
 If a build fails, read the output carefully and fix the errors before reporting back. Do not stop at the first error — fix as many as you can in one pass.
 
+### TestFlight (external)
+
+```bash
+asc workflow run testflight_external VERSION:1.0 GROUP:"yomy Tester"
+```
+
+**Never pass `SUBMIT_BETA:false` for an external release.** The env default in `.asc/workflow.json` is already `true`; leave it alone. Even when the marketing version is already approved, *every* build must be submitted for Beta App Review individually or it stalls at "Ready to Submit" and never reaches testers. `betaReviewState: APPROVED` in `asc status` is a per-version historical result, not a signal that the new build is exempt.
+
+Do not copy parameters from previous runs in `.asc/runs/*.json` — earlier runs contain `SUBMIT_BETA:false` and reusing them reintroduces the bug.
+
+If a build was uploaded without submission, submit it without re-archiving:
+
+```bash
+asc publish testflight --app 6770222036 --build-number <N> --group "yomy Tester" --submit --confirm --wait
+```
+
+Build numbers are auto-assigned from the git commit count by a Run Script phase, so re-running with nothing committed collides with the existing build.
+
 ---
 
 ## 5. Code Style
