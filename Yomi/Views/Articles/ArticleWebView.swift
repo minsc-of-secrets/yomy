@@ -9,6 +9,13 @@ struct ArticleWebView: View {
 
     @State private var navigator = WebViewNavigator()
 
+    /// The page currently on screen, not always the original article — the user
+    /// may have followed links inside the WebView. Shared by Share and
+    /// Open-in-browser so the two can never point at different URLs.
+    private var currentPageURL: URL? {
+        navigator.currentURL ?? URL(string: article.url)
+    }
+
     var body: some View {
         WebViewRepresentable(
             url: URL(string: article.url),
@@ -33,7 +40,7 @@ struct ArticleWebView: View {
             }
             ToolbarItemGroup(placement: .bottomBar) {
                 // Safari-style bottom bar: back / forward grouped on the leading
-                // side, share + reload on the trailing side.
+                // side, share + reload + open-in-browser on the trailing side.
                 Button {
                     navigator.goBack()
                 } label: {
@@ -50,12 +57,11 @@ struct ArticleWebView: View {
 
                 Spacer()
 
-                // Share the page currently on screen, not always the original
-                // article — the user may have followed links inside the WebView.
-                if let url = navigator.currentURL ?? URL(string: article.url) {
+                if let url = currentPageURL {
                     ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel("Share")
                 }
 
                 Button {
@@ -63,16 +69,19 @@ struct ArticleWebView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
+                .accessibilityLabel("Reload")
 
                 // Open in the user's default browser. `openURL` routes http/https
                 // through whichever browser the user has set as default (iOS 14+),
                 // so this respects Safari/Chrome/etc. rather than forcing Safari.
-                if let url = navigator.currentURL ?? URL(string: article.url) {
+                // The label stays browser-neutral even though the glyph doesn't.
+                if let url = currentPageURL {
                     Button {
                         openURL(url)
                     } label: {
                         Image(systemName: "safari")
                     }
+                    .accessibilityLabel("Open in Browser")
                 }
             }
         }
