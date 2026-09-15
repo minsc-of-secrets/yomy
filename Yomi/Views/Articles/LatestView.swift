@@ -42,6 +42,10 @@ struct LatestView: View {
                     selectedArticle: $selectedArticle
                 )
             }
+            // 空の List は grouped の背景を描かず systemBackground(白) になるため、
+            // 記事0件のタブだけ白く浮いて見える。行の有無によらず色を固定する。
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
             .refreshable {
                 await refresh()
             }
