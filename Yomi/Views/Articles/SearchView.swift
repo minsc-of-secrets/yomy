@@ -50,6 +50,10 @@ private struct SearchResultsView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
         }
+        // 空の List は grouped の背景を描かず systemBackground(白) になるため、
+        // 行の有無によらず色を固定する。
+        .scrollContentBackground(.hidden)
+        .background(Color(uiColor: .systemGroupedBackground))
         .sheet(item: $selectedArticle) { article in
             NavigationStack {
                 ArticleWebView(article: article)

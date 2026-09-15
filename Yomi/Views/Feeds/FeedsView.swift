@@ -34,6 +34,10 @@ struct FeedsView: View {
                     }
                 }
             }
+            // 空の List は grouped の背景を描かず systemBackground(白) になるため、
+            // 行の有無によらず色を固定する。
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Feeds")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
