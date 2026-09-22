@@ -5,10 +5,18 @@ import WidgetKit
 
 private let ogFetchConcurrency = 5
 private let widgetLog = Logger(subsystem: "com.shakshi.yomy", category: "Widget")
+/// Widget に載せるのは先頭 10 件だけ。dedup で減る分の余裕を見た上限で打ち切る。
+private let widgetSnapshotFetchLimit = 100
+/// スナップショット更新をまとめるデバウンス幅。
+private let widgetSnapshotDebounce = Duration.milliseconds(500)
+/// 既読化の永続化を遅らせる幅。シート表示アニメーションが始まってから書き込む。
+private let readPersistDelay = Duration.milliseconds(300)
 
 @MainActor
 final class FeedService {
     static let shared = FeedService()
+
+    private var widgetSnapshotTask: Task<Void, Never>?
 
     func refresh(feed: Feed, context: ModelContext) async throws {
         let parsed = try await RSSFetcher.shared.fetch(url: feed.url)
@@ -99,18 +107,35 @@ final class FeedService {
         updateWidgetSnapshot(context: context)
     }
 
+    /// Widget スナップショットの更新をデバウンスして遅延実行する。
+    ///
+    /// 記事を開いた直後はシートの表示アニメーションと WebView の初回ロードが走っている。
+    /// そこで同期的に fetch を走らせるとメインスレッドが塞がり、タップからページが出るまでの
+    /// 体感が悪くなるため、更新は必ずこの入口から呼ぶ。
+    func scheduleWidgetSnapshotUpdate(context: ModelContext) {
+        widgetSnapshotTask?.cancel()
+        widgetSnapshotTask = Task { [self] in
+            try? await Task.sleep(for: widgetSnapshotDebounce)
+            guard !Task.isCancelled else { return }
+            updateWidgetSnapshot(context: context)
+        }
+    }
+
     func updateWidgetSnapshot(context: ModelContext) {
-        let descriptor = FetchDescriptor<Article>(
+        // 全記事を materialize すると記事数に比例してメインスレッドが止まる。
+        // 実際に必要なのは未読の新しい順の先頭だけなので、述語と件数上限で store 側に絞らせる。
+        var descriptor = FetchDescriptor<Article>(
+            predicate: #Predicate<Article> { $0.isRead == false },
             sortBy: [SortDescriptor(\.publishedAt, order: .reverse)]
         )
-        guard let allArticles = try? context.fetch(descriptor) else {
+        descriptor.fetchLimit = widgetSnapshotFetchLimit
+        guard let unread = try? context.fetch(descriptor) else {
             widgetLog.error("updateWidgetSnapshot: fetch failed")
             return
         }
-        let unread = allArticles.filter { !$0.isRead }
         let deduped = Self.dedupByURL(unread)
         let top = Array(deduped.prefix(10))
-        widgetLog.info("updateWidgetSnapshot: total=\(allArticles.count) unread=\(unread.count) deduped=\(deduped.count) snapshot=\(top.count)")
+        widgetLog.info("updateWidgetSnapshot: unread=\(unread.count) deduped=\(deduped.count) snapshot=\(top.count)")
         let widgetArticles = top.map { article in
             WidgetArticle(
                 id: article.id.uuidString,
@@ -240,7 +265,7 @@ final class FeedService {
             article.isRead = true
         }
         try context.save()
-        updateWidgetSnapshot(context: context)
+        scheduleWidgetSnapshotUpdate(context: context)
     }
 
     static func dedupByURL(_ articles: [Article]) -> [Article] {
@@ -260,9 +285,20 @@ final class FeedService {
     }
 
     func setRead(article: Article, isRead: Bool, context: ModelContext) {
-        applyToSiblings(of: article, context: context) { $0.isRead = isRead }
-        try? context.save()
-        updateWidgetSnapshot(context: context)
+        // 1) タップされた記事だけ即時に反映し、既読スタイルの切り替えを即応させる。
+        article.isRead = isRead
+
+        // 2) 同一 URL の重複記事への波及・永続化・Widget 更新は後回しにする。
+        //    記事を開いた直後はシートの表示アニメーションと WebView の初回ロードが走っており、
+        //    ここで fetch(全件述語)+ save(ディスクフラッシュ)+ スナップショット生成を
+        //    同期実行するとメインスレッドが数百 ms 止まる。これが
+        //    「タップしてからブラウザが開くまでが遅い」体感の主因だった。
+        Task {
+            try? await Task.sleep(for: readPersistDelay)
+            applyToSiblings(of: article, context: context) { $0.isRead = isRead }
+            try? context.save()
+            scheduleWidgetSnapshotUpdate(context: context)
+        }
     }
 
     func setSaved(article: Article, isSaved: Bool, context: ModelContext) {

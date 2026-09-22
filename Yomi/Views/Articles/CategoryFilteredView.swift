@@ -17,9 +17,13 @@ struct CategoryFilteredView: View {
     }
 
     var body: some View {
-        List {
+        // filteredArticles は feed リレーションを全記事ぶん手繰るため、body 評価あたり 1 回に抑える。
+        // 記事タップで body が再評価されるので、ここで 2 回引くとタップ直後の体感に効く。
+        let filtered = filteredArticles
+
+        return List {
             ArticleFeedSections(
-                articles: filteredArticles,
+                articles: filtered,
                 showsFeatured: false,
                 selectedArticle: $selectedArticle
             )
@@ -34,7 +38,7 @@ struct CategoryFilteredView: View {
             await refresh()
         }
         .overlay {
-            if filteredArticles.isEmpty && !isRefreshing {
+            if filtered.isEmpty && !isRefreshing {
                 ContentUnavailableView(
                     "No Articles",
                     systemImage: "newspaper",

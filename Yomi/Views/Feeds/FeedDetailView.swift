@@ -16,7 +16,10 @@ struct FeedDetailView: View {
     }
 
     var body: some View {
-        List(sortedArticles) { article in
+        // 記事タップで body が再評価されるため、ソートは 1 回に抑える。
+        let sorted = sortedArticles
+
+        return List(sorted) { article in
             Button {
                 selectedArticle = article
             } label: {
@@ -80,7 +83,7 @@ struct FeedDetailView: View {
             Text("\"\(feed.title.isEmpty ? feed.url : feed.title)\" and all its articles will be removed.")
         }
         .overlay {
-            if sortedArticles.isEmpty {
+            if sorted.isEmpty {
                 ContentUnavailableView("No Articles", systemImage: "doc.text")
             }
         }

@@ -85,11 +85,48 @@ struct ArticleWebView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            // ロード時間そのものは縮められないが、進捗が見えるだけで待ち時間の体感は変わる。
+            // Safari と同じく上端に細いバーを出し、読み終わったらフェードアウトさせる。
+            // if で出し入れせず opacity で消すのは、アニメーションを
+            // このバーだけに閉じ込めて WebView やツールバーを巻き込まないため。
+            ProgressView(value: navigator.isLoading ? navigator.estimatedProgress : 1)
+                .progressViewStyle(.linear)
+                .opacity(navigator.isLoading ? 1 : 0)
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.2), value: navigator.estimatedProgress)
+                .animation(.easeOut(duration: 0.2), value: navigator.isLoading)
+        }
         .onAppear {
             if !article.isRead {
                 FeedService.shared.setRead(article: article, isRead: true, context: context)
             }
         }
+    }
+}
+
+/// WKWebView の生成コストを記事タップの外に追い出すための温め処理。
+///
+/// アプリ内で最初に WKWebView を作るときは WebContent / Networking プロセスの起動が走り、
+/// 実機でも数百 ms かかる。そのコストを「記事をタップした瞬間」ではなく起動直後に払っておく。
+/// 一度起きたプロセスは WebKit 側でキャッシュされるため、次に作る web view が再利用する。
+@MainActor
+enum WebViewWarmer {
+    private static var warmupWebView: WKWebView?
+    private static var didPrewarm = false
+
+    /// 起動直後に一度だけ呼ぶ。捨て web view を 1 つ作って WebKit のプロセスを起こす。
+    static func prewarm() {
+        guard !didPrewarm else { return }
+        didPrewarm = true
+        let webView = WKWebView()
+        webView.loadHTMLString("<html><body></body></html>", baseURL: nil)
+        warmupWebView = webView
+    }
+
+    /// 記事用の web view ができれば温め役は役目を終える。常駐メモリを抱えないよう解放する。
+    static func releaseWarmup() {
+        warmupWebView = nil
     }
 }
 
@@ -104,6 +141,9 @@ final class WebViewNavigator {
     var canGoForward = false
     /// URL of the page currently displayed (tracks in-page link navigation).
     var currentURL: URL?
+    /// Drives the Safari-style progress bar at the top of the sheet.
+    var isLoading = false
+    var estimatedProgress: Double = 0
 
     func goBack() { webView?.goBack() }
     func goForward() { webView?.goForward() }
@@ -119,19 +159,42 @@ struct WebViewRepresentable: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
+        let navigator = self.navigator
         let webView = WKWebView()
+        WebViewWarmer.releaseWarmup()
+
+        // updateUIView ではなくここでロードを始める。updateUIView は SwiftUI が
+        // シートのレイアウトを終えてから呼ばれるため、その分だけ最初のバイトが遅れていた。
+        //
+        // KVO の登録より前にロードするのは、load() が isLoading / url を同期的に変えるため。
+        // SwiftUI の更新フェーズ中に observable state を書くと
+        // "Modifying state during view update" になる。
+        if let url {
+            webView.load(URLRequest(url: url))
+        }
+
         navigator.webView = webView
         context.coordinator.observe(webView)
+
+        // 登録前に起きた変化を取りこぼさないよう、初期値だけ次の main-actor ターンで反映する。
+        let isLoading = webView.isLoading
+        let progress = webView.estimatedProgress
+        let currentURL = webView.url
+        Task { @MainActor in
+            navigator.isLoading = isLoading
+            navigator.estimatedProgress = progress
+            if let currentURL {
+                navigator.currentURL = currentURL
+            }
+        }
+
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        // Load only once, on first appearance. Comparing against `url` would
-        // reload the original article whenever the user follows an in-page link
-        // (canGoBack/canGoForward state changes retrigger updateUIView), which
-        // would defeat the back/forward navigation this view provides.
-        guard let url, webView.url == nil else { return }
-        webView.load(URLRequest(url: url))
+        // ロードは makeUIView で一度だけ開始する。ここで url を見て読み直すと、
+        // ページ内リンクをたどった後の canGoBack/canGoForward 更新(= updateUIView 再実行)で
+        // 元の記事に引き戻され、戻る/進むが機能しなくなる。
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -143,6 +206,8 @@ struct WebViewRepresentable: UIViewRepresentable {
         private var backObservation: NSKeyValueObservation?
         private var forwardObservation: NSKeyValueObservation?
         private var urlObservation: NSKeyValueObservation?
+        private var loadingObservation: NSKeyValueObservation?
+        private var progressObservation: NSKeyValueObservation?
 
         init(navigator: WebViewNavigator) {
             self.navigator = navigator
@@ -162,15 +227,25 @@ struct WebViewRepresentable: UIViewRepresentable {
             urlObservation = webView.observe(\.url, options: [.new]) { [navigator] webView, _ in
                 navigator.currentURL = webView.url
             }
+            loadingObservation = webView.observe(\.isLoading, options: [.new]) { [navigator] webView, _ in
+                navigator.isLoading = webView.isLoading
+            }
+            progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [navigator] webView, _ in
+                navigator.estimatedProgress = webView.estimatedProgress
+            }
         }
 
         func stopObserving() {
             backObservation?.invalidate()
             forwardObservation?.invalidate()
             urlObservation?.invalidate()
+            loadingObservation?.invalidate()
+            progressObservation?.invalidate()
             backObservation = nil
             forwardObservation = nil
             urlObservation = nil
+            loadingObservation = nil
+            progressObservation = nil
         }
     }
 }
