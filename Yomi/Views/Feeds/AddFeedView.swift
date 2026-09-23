@@ -43,10 +43,10 @@ struct AddFeedView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel", systemImage: "xmark") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button("Add", systemImage: "checkmark") {
                         Task { await addFeed() }
                     }
                     .disabled(urlText.isEmpty || isLoading)

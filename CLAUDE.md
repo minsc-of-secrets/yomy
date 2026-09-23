@@ -104,6 +104,8 @@ Build numbers are auto-assigned from the git commit count by a Run Script phase,
 
 ## 6. UI Guidelines
 
+- **Toolbar Cancel / Done / Save are glyphs, not words.** `Button("Cancel", systemImage: "xmark")`, `Button("Done", systemImage: "checkmark")` — a toolbar button given a `systemImage` renders icon-only on iOS and keeps its title as the accessibility label. Buttons inside an alert or confirmation dialog stay text. Shared across Monaka / yomy / Madeleine / LangueDeChat.
+
 ### Article cards
 
 - **Featured (top of Latest)**: image at top, full-bleed, 240pt tall; title and metadata below

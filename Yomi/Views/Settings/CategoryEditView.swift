@@ -75,7 +75,7 @@ struct CategoryEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
+                Button("Done", systemImage: "checkmark") {
                     save()
                     dismiss()
                 }
