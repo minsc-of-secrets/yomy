@@ -125,7 +125,10 @@ enum WebViewWarmer {
     }
 
     /// 記事用の web view ができれば温め役は役目を終える。常駐メモリを抱えないよう解放する。
+    /// 起動 1 秒以内に記事が開かれた場合(Widget からの起動など)は、この後に prewarm が
+    /// 来ても不要なので作らせない。
     static func releaseWarmup() {
+        didPrewarm = true
         warmupWebView = nil
     }
 }

@@ -295,6 +295,8 @@ final class FeedService {
         //    「タップしてからブラウザが開くまでが遅い」体感の主因だった。
         Task {
             try? await Task.sleep(for: readPersistDelay)
+            // 待っている間にフィードごと削除されていたら、削除済みモデルに触るとクラッシュする。
+            guard article.modelContext != nil, !article.isDeleted else { return }
             applyToSiblings(of: article, context: context) { $0.isRead = isRead }
             try? context.save()
             scheduleWidgetSnapshotUpdate(context: context)

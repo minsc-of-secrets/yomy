@@ -78,6 +78,8 @@ struct ArticleFeedLayout {
 final class ArticleFeedLayoutCache {
     private var keyArticles: [Article] = []
     private var keyShowsFeatured = true
+    /// "Today" / "Yesterday" / 年の表記は今日の日付に依存するので、日付が変わったら作り直す。
+    private var keyDay = Date.distantPast
     private var cached: ArticleFeedLayout?
 
     private static let shortFormatter: DateFormatter = {
@@ -94,14 +96,17 @@ final class ArticleFeedLayoutCache {
 
     @MainActor
     func layout(for articles: [Article], showsFeatured: Bool) -> ArticleFeedLayout {
+        let today = Calendar.current.startOfDay(for: Date())
         if let cached,
            keyShowsFeatured == showsFeatured,
+           keyDay == today,
            Self.isSameOrder(keyArticles, articles) {
             return cached
         }
         let layout = Self.makeLayout(articles: articles, showsFeatured: showsFeatured)
         keyArticles = articles
         keyShowsFeatured = showsFeatured
+        keyDay = today
         cached = layout
         return layout
     }
