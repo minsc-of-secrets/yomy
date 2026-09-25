@@ -7,6 +7,14 @@ struct ContentView: View {
 
     var body: some View {
         tabs
+            .onAppear {
+                // WebKit のプロセス起動を「最初の記事タップ」ではなく起動直後に済ませておく。
+                // 初回描画とは競合させたくないので少しだけ遅らせる。
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1))
+                    WebViewWarmer.prewarm()
+                }
+            }
             .onOpenURL { url in
                 guard url.scheme == "yomi",
                       url.host == "open",

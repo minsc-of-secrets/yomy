@@ -10,7 +10,6 @@ struct LatestView: View {
     @State private var isRefreshing = false
     @State private var selectedArticle: Article?
     @State private var showSettings = false
-    @State private var widgetUpdateTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -91,16 +90,12 @@ struct LatestView: View {
         isRefreshing = false
     }
 
-    /// 起動直後の初回描画をブロックしないよう Widget スナップショット更新を遅延させ、
-    /// リフレッシュ中に連続で発火する onChange を 1 回にデバウンスする。
+    /// 起動直後の初回描画をブロックしないよう Widget スナップショット更新を遅延させる。
+    /// デバウンスは FeedService 側で一元管理しているので、既読化など他の経路から来る更新とも
+    /// まとめて 1 回に畳まれる。
     private func scheduleWidgetUpdate() {
         guard !articles.isEmpty else { return }
-        widgetUpdateTask?.cancel()
-        widgetUpdateTask = Task {
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled else { return }
-            FeedService.shared.updateWidgetSnapshot(context: context)
-        }
+        FeedService.shared.scheduleWidgetSnapshotUpdate(context: context)
     }
 }
 
