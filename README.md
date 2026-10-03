@@ -28,3 +28,24 @@ The name comes from 読み (*yomi*), Japanese for "reading".
 ## Acknowledgements
 
 Originally forked from [minsc-of-secrets/yomy](https://github.com/minsc-of-secrets/yomy).
+
+## Parser regression tests
+
+On macOS 14+ with Xcode's Swift 5.9+ toolchain:
+
+```bash
+swift test
+```
+
+The Swift package compiles the same RSS/Atom/JSON parser, OPML parser, and
+SwiftData models used by the app. Tests use local XML fixtures; no live feed
+requests are required. GitHub Actions runs them on pull requests.
+This is a parser check, not an iOS app build or UI test. Build the app separately:
+
+```bash
+xcodebuild -project Yomi.xcodeproj -scheme Yomi \
+  -destination 'generic/platform=iOS Simulator' \
+  -configuration Debug build CODE_SIGNING_ALLOWED=NO
+```
+
+Use an Xcode version with the iOS 26 SDK for the current UI APIs and Icon Composer assets.

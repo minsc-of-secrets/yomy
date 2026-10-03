@@ -50,7 +50,7 @@ actor RSSFetcher {
         }
     }
 
-    private func parseFeed(_ feed: FeedKit.Feed, sourceURL: String) throws -> ParsedFeed {
+    func parseFeed(_ feed: FeedKit.Feed, sourceURL: String) throws -> ParsedFeed {
         switch feed {
         case .rss(let rss):
             return parseRSS(rss)
@@ -89,7 +89,9 @@ actor RSSFetcher {
     private func parseAtom(_ feed: AtomFeed) -> ParsedFeed {
         let articles = (feed.entries ?? []).compactMap { entry -> ParsedArticle? in
             guard let title = entry.title else { return nil }
-            let link = entry.links?.first?.attributes?.href ?? ""
+            let link = preferredAtomLink((entry.links ?? []).map {
+                ($0.attributes?.href, $0.attributes?.rel, $0.attributes?.type)
+            }) ?? ""
             guard !link.isEmpty else { return nil }
             let guid = entry.id ?? link
             let summary = entry.summary?.value ?? entry.content?.value ?? ""
@@ -105,9 +107,27 @@ actor RSSFetcher {
         }
         return ParsedFeed(
             title: feed.title ?? "",
-            siteURL: feed.links?.first?.attributes?.href ?? "",
+            siteURL: preferredAtomLink((feed.links ?? []).map {
+                ($0.attributes?.href, $0.attributes?.rel, $0.attributes?.type)
+            }) ?? "",
             articles: articles
         )
+    }
+
+    /// Atom links are unordered. Missing rel means alternate (RFC 4287 §4.2.7.2).
+    /// Prefer browser-readable alternates without ever opening self/enclosure URLs.
+    private func preferredAtomLink(_ links: [(href: String?, rel: String?, type: String?)]) -> String? {
+        let alternates = links.filter {
+            let relation = $0.rel ?? "alternate"
+            return (relation == "alternate" || relation == "http://www.iana.org/assignments/relation/alternate")
+                && !($0.href?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        let html = alternates.first {
+            let type = $0.type?.split(separator: ";", maxSplits: 1).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return type == "text/html" || type == "application/xhtml+xml"
+        }
+        return (html ?? alternates.first { $0.type == nil } ?? alternates.first)?.href
     }
 
     private func parseJSON(_ feed: JSONFeed) -> ParsedFeed {
