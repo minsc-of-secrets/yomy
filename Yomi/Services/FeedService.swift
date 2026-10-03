@@ -282,7 +282,9 @@ final class FeedService {
             // A newer bulk action must supersede earlier delayed single-article writes,
             // even when the article already appears read in memory.
             cancelPendingRead(for: article, context: context)
-            article.isRead = true
+            if !article.isRead {
+                article.isRead = true
+            }
         }
         try context.save()
         scheduleWidgetSnapshotUpdate(context: context)

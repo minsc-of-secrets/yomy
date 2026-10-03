@@ -129,4 +129,25 @@ final class ArticleStateTests: XCTestCase {
         XCTAssertNil(sibling.savedAt)
     }
 
+
+    @MainActor
+    func testMarkAllReadCancelsPendingWriteEvenWhenArticleAlreadyAppearsRead() async throws {
+        let (container, context, feed, article) = try fixture()
+        defer { withExtendedLifetime(container) {} }
+        let otherFeed = Feed(url: "https://example.com/other-rss", title: "Other")
+        context.insert(otherFeed)
+        let sibling = Article(guid: "2", url: article.url, title: "Sibling", publishedAt: Date(), feed: otherFeed)
+        context.insert(sibling)
+        try context.save()
+        let service = FeedService()
+        service.setRead(article: article, isRead: true, context: context)
+        XCTAssertTrue(article.isRead)
+        try service.markAllRead(feed: feed, context: context)
+        try await settle()
+        XCTAssertTrue(article.isRead)
+        // Mark All Read only targets its own feed. If the older task were not
+        // cancelled, it would later propagate to this other-feed sibling.
+        XCTAssertFalse(sibling.isRead)
+    }
+
 }
