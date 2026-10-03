@@ -11,6 +11,7 @@ final class RSSFetcherTests: XCTestCase {
           \(links)
           <entry><title>Article</title><id>urn:example:article</id><updated>2026-01-01T00:00:00Z</updated>
             \(entryLinks ?? links)
+            <content type="text">Article body supplied inline.</content>
           </entry>
         </feed>
         """
@@ -86,4 +87,74 @@ final class RSSFetcherTests: XCTestCase {
         XCTAssertEqual(feed.articles.first?.url, "https://example.com/article")
         XCTAssertEqual(feed.articles.first?.guid, "article-1")
     }
+
+    func testContentOnlyEntryUsesRelatedPageWhenNoAlternateExists() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="self" type="application/atom+xml" href="https://example.com/entry.atom"/>
+        <link rel="enclosure" href="https://example.com/audio.mp3"/>
+        <link rel="related" type="text/html" href="https://example.com/article"/>
+        """)
+        XCTAssertEqual(feed.articles.first?.url, "https://example.com/article")
+        XCTAssertEqual(feed.siteURL, "https://example.com/article")
+    }
+
+    func testAlternateAlwaysWinsOverRelatedHTML() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="related" type="text/html" href="https://example.com/related"/>
+        <link rel="alternate" href="https://example.com/article"/>
+        """)
+        XCTAssertEqual(feed.articles.first?.url, "https://example.com/article")
+    }
+
+    func testRelatedFallbackRejectsUnsafeOrHostlessURLs() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="related" href="javascript:alert(1)"/>
+        <link rel="related" href="file:///tmp/article.html"/>
+        <link rel="related" href="https:/article"/>
+        <link rel="edit" href="https://example.com/edit"/>
+        """)
+        XCTAssertTrue(feed.articles.isEmpty)
+        XCTAssertEqual(feed.siteURL, "")
+    }
+
+    func testRegisteredRelatedRelationAndHTMLPreference() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="related" type="application/pdf" href="https://example.com/article.pdf"/>
+        <link rel="http://www.iana.org/assignments/relation/related" type="application/xhtml+xml" href="http://example.com/article"/>
+        """)
+        XCTAssertEqual(feed.articles.first?.url, "http://example.com/article")
+    }
+
+
+    func testInvalidAlternatesDoNotHideRelatedWebPage() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="alternate" type="text/html" href="javascript:alert(1)"/>
+        <link rel="alternate" href="file:///tmp/article.html"/>
+        <link rel="alternate" href="https:/article"/>
+        <link rel="related" href="https://example.com/article"/>
+        """)
+        XCTAssertEqual(feed.articles.first?.url, "https://example.com/article")
+        XCTAssertEqual(feed.siteURL, "https://example.com/article")
+    }
+
+    func testInvalidAlternateDoesNotHideLaterValidAlternate() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="alternate" type="text/html" href="customapp://article"/>
+        <link href="https://example.com/article"/>
+        """)
+        XCTAssertEqual(feed.articles.first?.url, "https://example.com/article")
+    }
+
+    func testEntriesWithOnlyNonWebOrHostlessAlternatesAreSkipped() async throws {
+        let feed = try await parseAtom(links: """
+        <link rel="alternate" href="javascript:alert(1)"/>
+        <link href="file:///tmp/article.html"/>
+        <link href="customapp://article"/>
+        <link href="https:/article"/>
+        <link href="/relative-article"/>
+        """)
+        XCTAssertTrue(feed.articles.isEmpty)
+        XCTAssertEqual(feed.siteURL, "")
+    }
+
 }

@@ -115,19 +115,31 @@ actor RSSFetcher {
     }
 
     /// Atom links are unordered. Missing rel means alternate (RFC 4287 §4.2.7.2).
-    /// Prefer browser-readable alternates without ever opening self/enclosure URLs.
+    /// Prefer browser-readable alternates; content-only entries may offer only a
+    /// related page. Fall back to an explicit HTTP(S) related link, never self/enclosure.
     private func preferredAtomLink(_ links: [(href: String?, rel: String?, type: String?)]) -> String? {
-        let alternates = links.filter {
-            let relation = $0.rel ?? "alternate"
-            return (relation == "alternate" || relation == "http://www.iana.org/assignments/relation/alternate")
-                && !($0.href?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        let webLinks = links.filter {
+            guard let href = $0.href,
+                  let url = URL(string: href),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http",
+                  let host = url.host, !host.isEmpty else { return false }
+            return true
         }
-        let html = alternates.first {
+        let alternates = webLinks.filter {
+            let relation = $0.rel ?? "alternate"
+            return relation == "alternate" || relation == "http://www.iana.org/assignments/relation/alternate"
+        }
+        let related = webLinks.filter {
+            $0.rel == "related" || $0.rel == "http://www.iana.org/assignments/relation/related"
+        }
+        let candidates = alternates.isEmpty ? related : alternates
+        let html = candidates.first {
             let type = $0.type?.split(separator: ";", maxSplits: 1).first?
                 .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             return type == "text/html" || type == "application/xhtml+xml"
         }
-        return (html ?? alternates.first { $0.type == nil } ?? alternates.first)?.href
+        return (html ?? candidates.first { $0.type == nil } ?? candidates.first)?.href
     }
 
     private func parseJSON(_ feed: JSONFeed) -> ParsedFeed {
