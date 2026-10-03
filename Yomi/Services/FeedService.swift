@@ -17,6 +17,23 @@ final class FeedService {
     static let shared = FeedService()
 
     private var widgetSnapshotTask: Task<Void, Never>?
+    private var pendingReadTasks: [ArticleMutationKey: Task<Void, Never>] = [:]
+    private var pendingSavedTasks: [ArticleMutationKey: Task<Void, Never>] = [:]
+
+    private struct ArticleMutationKey: Hashable {
+        let context: ObjectIdentifier
+        let article: String
+
+        init(article: Article, context: ModelContext) {
+            self.context = ObjectIdentifier(context)
+            self.article = article.url.isEmpty ? "id:\(article.id)" : "url:\(article.url)"
+        }
+    }
+
+    private func cancelPendingRead(for article: Article, context: ModelContext) {
+        let key = ArticleMutationKey(article: article, context: context)
+        pendingReadTasks.removeValue(forKey: key)?.cancel()
+    }
 
     func refresh(feed: Feed, context: ModelContext) async throws {
         let parsed = try await RSSFetcher.shared.fetch(url: feed.url)
@@ -261,7 +278,10 @@ final class FeedService {
     }
 
     func markAllRead(feed: Feed, context: ModelContext) throws {
-        for article in feed.articles where !article.isRead {
+        for article in feed.articles {
+            // A newer bulk action must supersede earlier delayed single-article writes,
+            // even when the article already appears read in memory.
+            cancelPendingRead(for: article, context: context)
             article.isRead = true
         }
         try context.save()
@@ -285,6 +305,8 @@ final class FeedService {
     }
 
     func setRead(article: Article, isRead: Bool, context: ModelContext) {
+        let key = ArticleMutationKey(article: article, context: context)
+        cancelPendingRead(for: article, context: context)
         // 1) タップされた記事だけ即時に反映し、既読スタイルの切り替えを即応させる。
         article.isRead = isRead
 
@@ -293,10 +315,16 @@ final class FeedService {
         //    ここで fetch(全件述語)+ save(ディスクフラッシュ)+ スナップショット生成を
         //    同期実行するとメインスレッドが数百 ms 止まる。これが
         //    「タップしてからブラウザが開くまでが遅い」体感の主因だった。
-        Task {
-            try? await Task.sleep(for: readPersistDelay)
-            // 待っている間にフィードごと削除されていたら、削除済みモデルに触るとクラッシュする。
-            guard article.modelContext != nil, !article.isDeleted else { return }
+        pendingReadTasks[key] = Task {
+            do {
+                try await Task.sleep(for: readPersistDelay)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            defer { pendingReadTasks[key] = nil }
+            // Do not touch an article removed or moved while this task was suspended.
+            guard article.modelContext === context, !article.isDeleted else { return }
             applyToSiblings(of: article, context: context) { $0.isRead = isRead }
             try? context.save()
             scheduleWidgetSnapshotUpdate(context: context)
@@ -304,6 +332,8 @@ final class FeedService {
     }
 
     func setSaved(article: Article, isSaved: Bool, context: ModelContext) {
+        let key = ArticleMutationKey(article: article, context: context)
+        pendingSavedTasks.removeValue(forKey: key)?.cancel()
         let now = Date()
 
         // 1) タップされた記事だけを即時に反映し、bookmark.fill やメニュー閉じを即応させる。
@@ -313,7 +343,10 @@ final class FeedService {
         // 2) 同一 URL の重複記事への波及と永続化(fetch + save)は次の main-actor ターンへ回す。
         //    ここを同期実行するとディスクフラッシュ完了までタップ直後の再描画がブロックされ、
         //    「保存/解除が若干重い」体感につながっていた。
-        Task {
+        pendingSavedTasks[key] = Task {
+            guard !Task.isCancelled else { return }
+            defer { pendingSavedTasks[key] = nil }
+            guard article.modelContext === context, !article.isDeleted else { return }
             applyToSiblings(of: article, context: context) {
                 $0.isSaved = isSaved
                 $0.savedAt = isSaved ? now : nil
