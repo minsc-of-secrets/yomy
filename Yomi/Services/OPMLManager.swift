@@ -47,6 +47,7 @@ private final class OPMLParser: NSObject, XMLParserDelegate {
     private let data: Data
     private var feeds: [OPMLFeed] = []
     private var currentCategory = "General"
+    private var categoryStack: [String] = []
     private var error: Error?
 
     init(data: Data) {
@@ -65,6 +66,8 @@ private final class OPMLParser: NSObject, XMLParserDelegate {
                 qualifiedName: String?, attributes: [String: String] = [:]) {
         guard elementName == "outline" else { return }
 
+        // Every outline (including a feed) owns one stack frame.
+        categoryStack.append(currentCategory)
         let xmlURL = attributes["xmlUrl"] ?? attributes["xmlurl"] ?? ""
         if xmlURL.isEmpty {
             currentCategory = attributes["title"] ?? attributes["text"] ?? "General"
@@ -80,8 +83,8 @@ private final class OPMLParser: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
                 qualifiedName: String?) {
-        if elementName == "outline" && !feeds.isEmpty {
-            // category closed — reset handled by next open tag
+        if elementName == "outline", let parentCategory = categoryStack.popLast() {
+            currentCategory = parentCategory
         }
     }
 
