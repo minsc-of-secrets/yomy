@@ -35,9 +35,11 @@ final class BackgroundRefreshService {
             return
         }
 
-        let work = Task {
-            let context = ModelContext(container)
-            let feeds = (try? context.fetch(FetchDescriptor<Feed>())) ?? []
+        let work = Task { @MainActor in
+            // Share the UI identity map so an unsubscribe during a suspended
+            // refresh is immediately visible to FeedService's post-await guards.
+            let context = container.mainContext
+            let feeds = (try? context.fetch(FetchDescriptor<Feed>(predicate: #Predicate { $0.isSubscribed }))) ?? []
             await FeedService.shared.refreshAll(feeds: feeds, context: context)
             task.setTaskCompleted(success: !Task.isCancelled)
         }

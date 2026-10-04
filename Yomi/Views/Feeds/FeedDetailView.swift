@@ -63,7 +63,7 @@ struct FeedDetailView: View {
                     Button(role: .destructive) {
                         showDeleteConfirmation = true
                     } label: {
-                        Label("Delete Feed", systemImage: "trash")
+                        Label("Unsubscribe", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -73,14 +73,8 @@ struct FeedDetailView: View {
         .sheet(isPresented: $showEditFeed) {
             FeedManageView(feed: feed)
         }
-        .alert("Delete Feed?", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                try? FeedService.shared.deleteFeed(feed, context: context)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\"\(feed.title.isEmpty ? feed.url : feed.title)\" and all its articles will be removed.")
+        .sheet(isPresented: $showDeleteConfirmation) {
+            UnsubscribeFeedView(feed: feed) { dismiss() }
         }
         .overlay {
             if sorted.isEmpty {

@@ -16,9 +16,49 @@ private let readPersistDelay = Duration.milliseconds(300)
 final class FeedService {
     static let shared = FeedService()
 
+    private let fetchFeed: (String) async throws -> ParsedFeed
+    private let fetchImage: (String) async -> String?
+    private let saveSubscription: (ModelContext) throws -> Void
+
+    init(
+        fetchFeed: @escaping (String) async throws -> ParsedFeed = { try await RSSFetcher.shared.fetch(url: $0) },
+        fetchImage: @escaping (String) async -> String? = { await OGImageFetcher.shared.fetch(articleURL: $0) },
+        saveSubscription: @escaping (ModelContext) throws -> Void = { try $0.save() }
+    ) {
+        self.fetchFeed = fetchFeed
+        self.fetchImage = fetchImage
+        self.saveSubscription = saveSubscription
+    }
+
     private var widgetSnapshotTask: Task<Void, Never>?
     private var pendingReadTasks: [ArticleMutationKey: Task<Void, Never>] = [:]
     private var pendingSavedTasks: [ArticleMutationKey: Task<Void, Never>] = [:]
+    private var pendingSavedIntents: [ArticleMutationKey: SavedIntent] = [:]
+
+    private struct SavedIntent {
+        let article: Article
+        let isSaved: Bool
+        let savedAt: Date?
+    }
+
+    func savedArticleCount(_ articles: [Article], context: ModelContext) -> Int {
+        Self.dedupByURL(articles.filter {
+            pendingSavedIntents[ArticleMutationKey(article: $0, context: context)]?.isSaved ?? $0.isSaved
+        }).count
+    }
+
+    private func flushSavedIntents(context: ModelContext) {
+        let keys = pendingSavedIntents.keys.filter { $0.context == ObjectIdentifier(context) }
+        for key in keys {
+            guard let intent = pendingSavedIntents.removeValue(forKey: key) else { continue }
+            pendingSavedTasks.removeValue(forKey: key)?.cancel()
+            guard intent.article.modelContext === context, !intent.article.isDeleted else { continue }
+            applyToSiblings(of: intent.article, context: context) {
+                $0.isSaved = intent.isSaved
+                $0.savedAt = intent.savedAt
+            }
+        }
+    }
 
     private struct ArticleMutationKey: Hashable {
         let context: ObjectIdentifier
@@ -36,7 +76,10 @@ final class FeedService {
     }
 
     func refresh(feed: Feed, context: ModelContext) async throws {
-        let parsed = try await RSSFetcher.shared.fetch(url: feed.url)
+        guard feed.modelContext === context, !feed.isDeleted, feed.isSubscribed else { return }
+        let parsed = try await fetchFeed(feed.url)
+        // Unsubscribe can run while the network request is suspended.
+        guard feed.modelContext === context, !feed.isDeleted, feed.isSubscribed else { return }
 
         if feed.title.isEmpty || feed.title == feed.url {
             feed.title = parsed.title
@@ -100,8 +143,12 @@ final class FeedService {
                     running -= 1
                 }
                 group.addTask {
-                    if let url = await OGImageFetcher.shared.fetch(articleURL: articleURL) {
-                        await MainActor.run { article.imageURL = url }
+                    if let url = await self.fetchImage(articleURL) {
+                        await MainActor.run {
+                            guard article.modelContext === context, !article.isDeleted,
+                                  feed.isSubscribed else { return }
+                            article.imageURL = url
+                        }
                     }
                 }
                 running += 1
@@ -115,7 +162,7 @@ final class FeedService {
 
     func refreshAll(feeds: [Feed], context: ModelContext) async {
         await withTaskGroup(of: Void.self) { group in
-            for feed in feeds {
+            for feed in feeds where feed.isSubscribed {
                 group.addTask {
                     try? await self.refresh(feed: feed, context: context)
                 }
@@ -142,7 +189,7 @@ final class FeedService {
         // 全記事を materialize すると記事数に比例してメインスレッドが止まる。
         // 実際に必要なのは未読の新しい順の先頭だけなので、述語と件数上限で store 側に絞らせる。
         var descriptor = FetchDescriptor<Article>(
-            predicate: #Predicate<Article> { $0.isRead == false },
+            predicate: #Predicate<Article> { $0.isRead == false && $0.feed?.isSubscribed == true },
             sortBy: [SortDescriptor(\.publishedAt, order: .reverse)]
         )
         descriptor.fetchLimit = widgetSnapshotFetchLimit
@@ -202,7 +249,7 @@ final class FeedService {
         var feedURL = normalizedURL
         var parsed: ParsedFeed
         do {
-            parsed = try await RSSFetcher.shared.fetch(url: normalizedURL)
+            parsed = try await fetchFeed(normalizedURL)
         } catch {
             // The input may be a plain domain rather than a feed URL — try to
             // discover the feed from the page it points at.
@@ -218,17 +265,28 @@ final class FeedService {
             }
         }
 
-        let feed = Feed(
+        let resolvedURL = feedURL
+        let descriptor = FetchDescriptor<Feed>(predicate: #Predicate { $0.url == resolvedURL })
+        let existingFeed = try context.fetch(descriptor).first
+        let feed = existingFeed ?? Feed(
             url: feedURL,
             title: parsed.title.isEmpty ? normalizedURL : parsed.title,
             siteURL: parsed.siteURL,
             category: category
         )
-        context.insert(feed)
-
+        if existingFeed == nil { context.insert(feed) }
+        feed.isSubscribed = true
+        feed.category = category
+        // Reuse an archived source so re-subscribing preserves saved/read state.
+        let feedID = feed.id
+        let stored = try context.fetch(FetchDescriptor<Article>(
+            predicate: #Predicate { $0.feed?.id == feedID }
+        ))
+        var existingGUIDs = Set(stored.map(\.guid))
         var needsOGFetch: [(Article, String)] = []
 
         for parsedArticle in parsed.articles {
+            guard existingGUIDs.insert(parsedArticle.guid).inserted else { continue }
             let article = Article(
                 guid: parsedArticle.guid,
                 url: parsedArticle.url,
@@ -257,8 +315,12 @@ final class FeedService {
                     running -= 1
                 }
                 group.addTask {
-                    if let url = await OGImageFetcher.shared.fetch(articleURL: articleURL) {
-                        await MainActor.run { article.imageURL = url }
+                    if let url = await self.fetchImage(articleURL) {
+                        await MainActor.run {
+                            guard article.modelContext === context, !article.isDeleted,
+                                  feed.isSubscribed else { return }
+                            article.imageURL = url
+                        }
                     }
                 }
                 running += 1
@@ -272,12 +334,40 @@ final class FeedService {
         return feed
     }
 
+    func unsubscribe(_ feed: Feed, keepSavedArticles: Bool, context: ModelContext) throws {
+        guard feed.modelContext === context, !feed.isDeleted, feed.isSubscribed else { return }
+        // Classify all copies using the newest save/unsave intent, including an
+        // action on another feed's copy that has not propagated yet.
+        flushSavedIntents(context: context)
+        let feedID = feed.id
+        let articles = try context.fetch(FetchDescriptor<Article>(
+            predicate: #Predicate { $0.feed?.id == feedID }
+        ))
+        // Persist the user's existing state first. A failed unsubscribe can then roll
+        // back only this operation rather than unrelated pending read/save changes.
+        try saveSubscription(context)
+        do {
+            feed.isSubscribed = false
+            if keepSavedArticles && articles.contains(where: \.isSaved) {
+                for article in articles where !article.isSaved { context.delete(article) }
+            } else {
+                context.delete(feed)
+            }
+            try saveSubscription(context)
+        } catch {
+            context.rollback()
+            throw error
+        }
+        scheduleWidgetSnapshotUpdate(context: context)
+    }
+
+    // Explicit destructive API retained for callers that intend to remove all data.
     func deleteFeed(_ feed: Feed, context: ModelContext) throws {
-        context.delete(feed)
-        try context.save()
+        try unsubscribe(feed, keepSavedArticles: false, context: context)
     }
 
     func markAllRead(feed: Feed, context: ModelContext) throws {
+        guard feed.modelContext === context, !feed.isDeleted else { return }
         for article in feed.articles {
             // A newer bulk action must supersede earlier delayed single-article writes,
             // even when the article already appears read in memory.
@@ -307,6 +397,7 @@ final class FeedService {
     }
 
     func setRead(article: Article, isRead: Bool, context: ModelContext) {
+        guard article.modelContext === context, !article.isDeleted else { return }
         let key = ArticleMutationKey(article: article, context: context)
         cancelPendingRead(for: article, context: context)
         // 1) タップされた記事だけ即時に反映し、既読スタイルの切り替えを即応させる。
@@ -334,9 +425,11 @@ final class FeedService {
     }
 
     func setSaved(article: Article, isSaved: Bool, context: ModelContext) {
+        guard article.modelContext === context, !article.isDeleted else { return }
         let key = ArticleMutationKey(article: article, context: context)
         pendingSavedTasks.removeValue(forKey: key)?.cancel()
         let now = Date()
+        pendingSavedIntents[key] = SavedIntent(article: article, isSaved: isSaved, savedAt: isSaved ? now : nil)
 
         // 1) タップされた記事だけを即時に反映し、bookmark.fill やメニュー閉じを即応させる。
         article.isSaved = isSaved
@@ -347,7 +440,10 @@ final class FeedService {
         //    「保存/解除が若干重い」体感につながっていた。
         pendingSavedTasks[key] = Task {
             guard !Task.isCancelled else { return }
-            defer { pendingSavedTasks[key] = nil }
+            defer {
+                pendingSavedTasks[key] = nil
+                pendingSavedIntents[key] = nil
+            }
             guard article.modelContext === context, !article.isDeleted else { return }
             applyToSiblings(of: article, context: context) {
                 $0.isSaved = isSaved
