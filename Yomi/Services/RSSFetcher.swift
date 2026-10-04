@@ -50,7 +50,7 @@ actor RSSFetcher {
         }
     }
 
-    private func parseFeed(_ feed: FeedKit.Feed, sourceURL: String) throws -> ParsedFeed {
+    func parseFeed(_ feed: FeedKit.Feed, sourceURL: String) throws -> ParsedFeed {
         switch feed {
         case .rss(let rss):
             return parseRSS(rss)
@@ -89,7 +89,9 @@ actor RSSFetcher {
     private func parseAtom(_ feed: AtomFeed) -> ParsedFeed {
         let articles = (feed.entries ?? []).compactMap { entry -> ParsedArticle? in
             guard let title = entry.title else { return nil }
-            let link = entry.links?.first?.attributes?.href ?? ""
+            let link = preferredAtomLink((entry.links ?? []).map {
+                ($0.attributes?.href, $0.attributes?.rel, $0.attributes?.type)
+            }) ?? ""
             guard !link.isEmpty else { return nil }
             let guid = entry.id ?? link
             let summary = entry.summary?.value ?? entry.content?.value ?? ""
@@ -105,9 +107,39 @@ actor RSSFetcher {
         }
         return ParsedFeed(
             title: feed.title ?? "",
-            siteURL: feed.links?.first?.attributes?.href ?? "",
+            siteURL: preferredAtomLink((feed.links ?? []).map {
+                ($0.attributes?.href, $0.attributes?.rel, $0.attributes?.type)
+            }) ?? "",
             articles: articles
         )
+    }
+
+    /// Atom links are unordered. Missing rel means alternate (RFC 4287 §4.2.7.2).
+    /// Prefer browser-readable alternates; content-only entries may offer only a
+    /// related page. Fall back to an explicit HTTP(S) related link, never self/enclosure.
+    private func preferredAtomLink(_ links: [(href: String?, rel: String?, type: String?)]) -> String? {
+        let webLinks = links.filter {
+            guard let href = $0.href,
+                  let url = URL(string: href),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http",
+                  let host = url.host, !host.isEmpty else { return false }
+            return true
+        }
+        let alternates = webLinks.filter {
+            let relation = $0.rel ?? "alternate"
+            return relation == "alternate" || relation == "http://www.iana.org/assignments/relation/alternate"
+        }
+        let related = webLinks.filter {
+            $0.rel == "related" || $0.rel == "http://www.iana.org/assignments/relation/related"
+        }
+        let candidates = alternates.isEmpty ? related : alternates
+        let html = candidates.first {
+            let type = $0.type?.split(separator: ";", maxSplits: 1).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return type == "text/html" || type == "application/xhtml+xml"
+        }
+        return (html ?? candidates.first { $0.type == nil } ?? candidates.first)?.href
     }
 
     private func parseJSON(_ feed: JSONFeed) -> ParsedFeed {

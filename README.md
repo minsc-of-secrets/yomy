@@ -49,3 +49,24 @@ That historical check is no longer run on every push. For an explicit one-off
 comparison, set `YOMY_BASELINE_REF` to a compatible earlier commit when invoking
 the harness (the historical regression is expected to return a failing test).
 These state tests do not measure or reproduce the UI freeze reported in issue #6.
+
+## Parser regression tests
+
+On macOS 14+ with Xcode's Swift 5.9+ toolchain:
+
+```bash
+swift test
+```
+
+The Swift package compiles the same RSS/Atom/JSON parser, OPML parser, and
+SwiftData models used by the app. Tests use local XML fixtures; no live feed
+requests are required. GitHub Actions runs them on pull requests.
+This is a parser check, not an iOS app build or UI test. Build the app separately:
+
+```bash
+xcodebuild -project Yomi.xcodeproj -scheme Yomi \
+  -destination 'generic/platform=iOS Simulator' \
+  -configuration Debug build CODE_SIGNING_ALLOWED=NO
+```
+
+Use an Xcode version with the iOS 26 SDK for the current UI APIs and Icon Composer assets.

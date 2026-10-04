@@ -1,0 +1,29 @@
+name: Parser regression tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  parsers:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test production parsers
+        run: swift test
+  ios-build:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build app and widget without signing
+        run: >-
+          xcodebuild -project Yomi.xcodeproj -scheme Yomi
+          -destination 'generic/platform=iOS Simulator'
+          -configuration Debug build CODE_SIGNING_ALLOWED=NO
