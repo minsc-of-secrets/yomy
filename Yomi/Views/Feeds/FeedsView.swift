@@ -6,7 +6,7 @@ struct FeedsView: View {
     @Query(filter: #Predicate<Feed> { $0.isSubscribed }, sort: \Feed.createdAt) private var feeds: [Feed]
 
     @State private var showAddFeed = false
-    @State private var feedToUnsubscribe: Feed?
+    @State private var feedToUnsubscribe: FeedUnsubscribeRequest?
 
     private var groupedFeeds: [(String, [Feed])] {
         let groups = Dictionary(grouping: feeds, by: \.category)
@@ -26,7 +26,8 @@ struct FeedsView: View {
                             }
                             .swipeActions(edge: .trailing) {
                                 Button {
-                                    feedToUnsubscribe = feed
+                                    guard feed.modelContext === context, !feed.isDeleted else { return }
+                                    feedToUnsubscribe = FeedUnsubscribeRequest(feed: feed)
                                 } label: {
                                     Label("Unsubscribe", systemImage: "trash")
                                 }
@@ -53,8 +54,8 @@ struct FeedsView: View {
             .sheet(isPresented: $showAddFeed) {
                 AddFeedView()
             }
-            .sheet(item: $feedToUnsubscribe) { feed in
-                UnsubscribeFeedView(feed: feed)
+            .sheet(item: $feedToUnsubscribe) { request in
+                UnsubscribeFeedView(request: request)
             }
             .overlay {
                 if feeds.isEmpty {

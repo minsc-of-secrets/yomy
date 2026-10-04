@@ -1,32 +1,46 @@
 import SwiftUI
 import SwiftData
 
+/// Value-only presentation identity stays valid after the source model is deleted.
+struct FeedUnsubscribeRequest: Identifiable {
+    let id: UUID
+    let title: String
+
+    init(feed: Feed) {
+        id = feed.id
+        title = feed.title.isEmpty ? feed.url : feed.title
+    }
+}
+
 /// Shared by list swipe and feed detail. Opening or cancelling never mutates data.
 struct UnsubscribeFeedView: View {
-    let feed: Feed
+    let request: FeedUnsubscribeRequest
     var onUnsubscribed: () -> Void = {}
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var articles: [Article]
     @State private var keepSavedArticles = true
     @State private var errorMessage: String?
+    @State private var didUnsubscribe = false
 
-    init(feed: Feed, onUnsubscribed: @escaping () -> Void = {}) {
-        self.feed = feed
+    init(request: FeedUnsubscribeRequest, onUnsubscribed: @escaping () -> Void = {}) {
+        self.request = request
         self.onUnsubscribed = onUnsubscribed
-        let feedID = feed.id
+        let feedID = request.id
         _articles = Query(filter: #Predicate<Article> { $0.feed?.id == feedID })
     }
 
     private var savedCount: Int {
-        FeedService.shared.savedArticleCount(articles, context: context)
+        guard !didUnsubscribe else { return 0 }
+        let liveArticles = articles.filter { $0.modelContext === context && !$0.isDeleted }
+        return FeedService.shared.savedArticleCount(liveArticles, context: context)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Text(feed.title.isEmpty ? feed.url : feed.title)
+                    Text(request.title)
                     Text("\(savedCount) saved articles")
                     if savedCount > 0 {
                         Toggle("Keep saved articles", isOn: $keepSavedArticles)
@@ -41,9 +55,14 @@ struct UnsubscribeFeedView: View {
                 Section {
                     Button("Unsubscribe", role: .destructive) {
                         do {
-                            try FeedService.shared.unsubscribe(feed, keepSavedArticles: keepSavedArticles, context: context)
-                            dismiss()
+                            let feedID = request.id
+                            let descriptor = FetchDescriptor<Feed>(predicate: #Predicate { $0.id == feedID })
+                            if let feed = try context.fetch(descriptor).first {
+                                try FeedService.shared.unsubscribe(feed, keepSavedArticles: keepSavedArticles, context: context)
+                            }
+                            didUnsubscribe = true
                             onUnsubscribed()
+                            dismiss()
                         } catch {
                             errorMessage = error.localizedDescription
                         }

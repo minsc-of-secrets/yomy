@@ -213,6 +213,55 @@ final class UnsubscribeTests: XCTestCase {
         XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<Article>()), 0)
     }
 
+    @MainActor
+    func testActiveDuplicateDoesNotChangeCategoryOrSavedStateAndIsNotAdded() async throws {
+        let (container, context, feed, saved, _) = try fixture()
+        let feedID = feed.id
+        let savedID = saved.id
+        let savedDate = saved.savedAt
+        let service = FeedService(fetchFeed: { _ in self.parsedFeed() })
+        do {
+            _ = try await service.addFeed(url: feed.url, category: "Imported category", context: context)
+            XCTFail("An active subscription must report already subscribed")
+        } catch FeedService.AdditionError.alreadySubscribed {
+            // Expected: Add Feed displays this error and OPML's try? does not count it.
+        }
+        let imported = try? await service.addFeed(url: feed.url, category: "Imported category", context: context)
+        XCTAssertNil(imported)
+        XCTAssertFalse(context.hasChanges)
+        let reopened = ModelContext(container)
+        let feeds = try reopened.fetch(FetchDescriptor<Feed>())
+        XCTAssertEqual(feeds.count, 1)
+        XCTAssertEqual(feeds.first?.id, feedID)
+        XCTAssertEqual(feeds.first?.category, "Tech")
+        let articles = try reopened.fetch(FetchDescriptor<Article>())
+        XCTAssertEqual(articles.count, 2)
+        let retained = try XCTUnwrap(articles.first { $0.id == savedID })
+        XCTAssertTrue(retained.isSaved)
+        XCTAssertTrue(retained.isRead)
+        XCTAssertEqual(retained.savedAt, savedDate)
+    }
+
+    @MainActor
+    func testAnyActiveDuplicateTakesPrecedenceOverAnArchivedMatch() async throws {
+        let (container, context, archived, saved, _) = try fixture()
+        let service = FeedService(fetchFeed: { _ in self.parsedFeed() })
+        try service.unsubscribe(archived, keepSavedArticles: true, context: context)
+        let active = Feed(url: archived.url, title: "Active duplicate", category: "Active category")
+        context.insert(active)
+        try context.save()
+        let result = try? await service.addFeed(url: archived.url, category: "Imported category", context: context)
+        XCTAssertNil(result)
+        XCTAssertTrue(active.isSubscribed)
+        XCTAssertEqual(active.category, "Active category")
+        XCTAssertFalse(archived.isSubscribed)
+        XCTAssertEqual(archived.category, "Tech")
+        XCTAssertTrue(saved.isSaved)
+        let reopened = ModelContext(container)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Feed>()), 2)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Article>()), 1)
+    }
+
     private func parsedFeed() -> ParsedFeed {
         ParsedFeed(title: "Network source", siteURL: "https://example.com", articles: ["saved", "late"].map {
             ParsedArticle(guid: $0, url: "https://example.com/\($0)", title: $0, summary: "", imageURL: "https://example.com/image.png", author: "", publishedAt: Date())

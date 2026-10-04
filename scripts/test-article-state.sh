@@ -8,6 +8,8 @@ mkdir -p "$work/Sources/YomiState"
 # Compile the actual app files, not hand-maintained test doubles or reimplementations.
 cp "$root"/Yomi/Models/*.swift "$work/Sources/YomiState/"
 cp "$root"/Yomi/Services/*.swift "$work/Sources/YomiState/"
+# Hosted lifecycle tests render the actual SwiftUI views after SwiftData deletion.
+cp -R "$root/Yomi/Views" "$work/Sources/YomiState/Views"
 cp "$root/Shared/WidgetDataStore.swift" "$work/Sources/YomiState/"
 if [ -n "${YOMY_BASELINE_REF:-}" ]; then
     git -C "$root" show "$YOMY_BASELINE_REF:Yomi/Services/FeedService.swift" > "$work/Sources/YomiState/FeedService.swift"

@@ -16,6 +16,14 @@ private let readPersistDelay = Duration.milliseconds(300)
 final class FeedService {
     static let shared = FeedService()
 
+    enum AdditionError: LocalizedError {
+        case alreadySubscribed
+
+        var errorDescription: String? {
+            "You are already subscribed to this feed."
+        }
+    }
+
     private let fetchFeed: (String) async throws -> ParsedFeed
     private let fetchImage: (String) async -> String?
     private let saveSubscription: (ModelContext) throws -> Void
@@ -271,7 +279,14 @@ final class FeedService {
 
         let resolvedURL = feedURL
         let descriptor = FetchDescriptor<Feed>(predicate: #Predicate { $0.url == resolvedURL })
-        let existingFeed = try context.fetch(descriptor).first
+        let matches = try context.fetch(descriptor)
+        // Legacy stores may contain both active and archived copies of one URL.
+        // An active subscription wins; importing it again must not recategorize
+        // it or count it as a newly added feed.
+        guard !matches.contains(where: \.isSubscribed) else {
+            throw AdditionError.alreadySubscribed
+        }
+        let existingFeed = matches.first
         let feed = existingFeed ?? Feed(
             url: feedURL,
             title: parsed.title.isEmpty ? normalizedURL : parsed.title,
