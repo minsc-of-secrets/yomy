@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AB013CFC1010101010101001 /* UnsubscribeFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB013CFC1010101010101002 /* UnsubscribeFeedView.swift */; };
+		9E9E9208C7204439BB65CBA1 /* CategoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E9E9208C7204439BB65CBA2 /* CategoryService.swift */; };
 		039D4CB15A3D2A140F8FFE4F /* WidgetDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47C597D8CB3430F8C8974566 /* WidgetDataStore.swift */; };
 		06C9252A7E0A95F80CF8B89B /* Category.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5059A9C974E138CA49EC216 /* Category.swift */; };
 		158416DBA557DB7A6040D8E9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BDCF4B7B5525AE410FE301B /* ContentView.swift */; };
@@ -79,6 +80,7 @@
 
 /* Begin PBXFileReference section */
 		AB013CFC1010101010101002 /* UnsubscribeFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsubscribeFeedView.swift; sourceTree = "<group>"; };
+		9E9E9208C7204439BB65CBA2 /* CategoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryService.swift; sourceTree = "<group>"; };
 		02729AC73739B6CFF0674FFD /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		0433804E832D2E6A378F503B /* ArticleContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleContextMenu.swift; sourceTree = "<group>"; };
 		06F88F9C98C7F0B234D8DB16 /* OPMLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OPMLManager.swift; sourceTree = "<group>"; };
@@ -200,6 +202,7 @@
 			children = (
 				7B2E4D0A56F8C319722D5E4A /* FeedDiscoveryService.swift */,
 				58E58EE73138EA0491E1F1D4 /* FeedService.swift */,
+				9E9E9208C7204439BB65CBA2 /* CategoryService.swift */,
 				24BC3432A4FFC1E775E48CE8 /* OGImageFetcher.swift */,
 				06F88F9C98C7F0B234D8DB16 /* OPMLManager.swift */,
 				D912FB6EDE7FB28B88D4C35F /* RSSFetcher.swift */,
@@ -467,6 +470,7 @@
 				6A1F3C9D45E7B208611C4D3F /* FeedDiscoveryService.swift in Sources */,
 				4F085C878D36E7C93B399394 /* FeedService.swift in Sources */,
 				AB013CFC1010101010101001 /* UnsubscribeFeedView.swift in Sources */,
+				9E9E9208C7204439BB65CBA1 /* CategoryService.swift in Sources */,
 				20A5663EA9AB19AC7FDF2DE0 /* FeedsView.swift in Sources */,
 				4B4EEBC63BAFFD07CC326D43 /* LatestView.swift in Sources */,
 				648F66F2D726C3D49EFF094D /* OGImageFetcher.swift in Sources */,
