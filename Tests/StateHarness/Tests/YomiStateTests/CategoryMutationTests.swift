@@ -159,4 +159,3 @@ final class CategoryMutationTests: XCTestCase {
     }
 
 }
-
