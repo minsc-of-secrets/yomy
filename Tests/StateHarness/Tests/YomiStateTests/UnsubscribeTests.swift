@@ -169,21 +169,30 @@ final class UnsubscribeTests: XCTestCase {
 
     @MainActor
     func testSaveFailureRollsBackUnsubscribeButPreservesEarlierArticleChanges() throws {
-        let (container, context, feed, saved, other) = try fixture()
-        saved.isRead = false
-        var saves = 0
-        let service = FeedService(saveSubscription: { context in
-            saves += 1
-            if saves == 2 { throw CocoaError(.fileWriteUnknown) }
-            try context.save()
-        })
-        XCTAssertThrowsError(try service.unsubscribe(feed, keepSavedArticles: true, context: context))
-        XCTAssertTrue(feed.isSubscribed)
-        XCTAssertFalse(saved.isRead)
-        XCTAssertFalse(other.isDeleted)
-        let reopened = ModelContext(container)
-        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Article>()), 2)
-        XCTAssertTrue(try XCTUnwrap(reopened.fetch(FetchDescriptor<Feed>()).first).isSubscribed)
+        for keepSaved in [true, false] {
+            let (container, context, feed, saved, other) = try fixture()
+            saved.isRead = false
+            var saves = 0
+            let service = FeedService(saveSubscription: { context in
+                saves += 1
+                if saves == 2 { throw CocoaError(.fileWriteUnknown) }
+                try context.save()
+            })
+            XCTAssertThrowsError(try service.unsubscribe(feed, keepSavedArticles: keepSaved, context: context))
+            XCTAssertTrue(feed.isSubscribed)
+            XCTAssertFalse(saved.isRead)
+            XCTAssertFalse(other.isDeleted)
+            XCTAssertFalse(saved.isDeleted)
+            XCTAssertTrue(feed.modelContext === context)
+            XCTAssertTrue(saved.modelContext === context)
+            XCTAssertTrue(other.modelContext === context)
+            XCTAssertEqual(saved.feed?.id, feed.id)
+            XCTAssertEqual(other.feed?.id, feed.id)
+            XCTAssertEqual(feed.articles.count, 2)
+            let reopened = ModelContext(container)
+            XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Article>()), 2)
+            XCTAssertTrue(try XCTUnwrap(reopened.fetch(FetchDescriptor<Feed>()).first).isSubscribed)
+        }
     }
 
     @MainActor

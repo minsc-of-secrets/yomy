@@ -14,6 +14,14 @@ if [ -n "${YOMY_BASELINE_REF:-}" ]; then
 fi
 cd "$work"
 device="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for k,v in d["devices"].items() if "iOS" in k for x in v if x["name"].startswith("iPhone")))')"
+status=0
 xcodebuild -scheme YomiState -destination "platform=iOS Simulator,id=$device" \
     -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
-    test CODE_SIGNING_ALLOWED=NO "$@"
+    -resultBundlePath "$work/StateTests.xcresult" \
+    test CODE_SIGNING_ALLOWED=NO "$@" || status=$?
+if [ "$status" -ne 0 ]; then
+    # Keep crash/timeout details in CI logs before the temporary harness is removed.
+    xcrun xcresulttool get test-results summary --path "$work/StateTests.xcresult" || true
+    xcrun xcresulttool get object --legacy --format json --path "$work/StateTests.xcresult" || true
+fi
+exit "$status"

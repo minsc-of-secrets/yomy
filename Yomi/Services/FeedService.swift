@@ -178,7 +178,11 @@ final class FeedService {
     /// 体感が悪くなるため、更新は必ずこの入口から呼ぶ。
     func scheduleWidgetSnapshotUpdate(context: ModelContext) {
         widgetSnapshotTask?.cancel()
-        widgetSnapshotTask = Task { [self] in
+        // ModelContext does not own its container. Keep it alive across the
+        // debounce even if the caller's screen/test scope has already ended.
+        let container = context.container
+        widgetSnapshotTask = Task { [self, container] in
+            defer { withExtendedLifetime(container) {} }
             try? await Task.sleep(for: widgetSnapshotDebounce)
             guard !Task.isCancelled else { return }
             updateWidgetSnapshot(context: context)
@@ -356,6 +360,9 @@ final class FeedService {
             try saveSubscription(context)
         } catch {
             context.rollback()
+            // SwiftData restores the store but can leave this live model's
+            // scalar cache stale after rollback. Keep the visible subscription.
+            feed.isSubscribed = true
             throw error
         }
         scheduleWidgetSnapshotUpdate(context: context)

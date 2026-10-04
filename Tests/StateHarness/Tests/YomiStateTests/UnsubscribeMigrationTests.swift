@@ -116,7 +116,7 @@ final class UnsubscribeMigrationTests: XCTestCase {
     }
 
     @MainActor
-    func testExistingStoreMigratesWithSubscriptionEnabledAndSavedStateIntact() throws {
+    func testExistingStoreMigratesWithSubscriptionEnabledAndSavedStateIntact() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -136,5 +136,9 @@ final class UnsubscribeMigrationTests: XCTestCase {
         try FeedService().unsubscribe(feed, keepSavedArticles: true, context: context)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Article>()), 1)
         XCTAssertFalse(feed.isSubscribed)
+        // The production unsubscribe schedules a widget query after 500ms. Let it
+        // finish before this test removes the temporary on-disk store.
+        try await Task.sleep(for: .seconds(1))
+        withExtendedLifetime(container) {}
     }
 }
