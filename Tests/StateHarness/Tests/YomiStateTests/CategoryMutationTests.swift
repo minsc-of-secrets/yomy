@@ -6,7 +6,7 @@ final class CategoryMutationTests: XCTestCase {
     private enum TestError: Error { case saveFailed }
 
     @MainActor
-    private func fixture() throws -> (ModelContainer, ModelContext, Category, Feed, Feed, Article) {
+    private func fixture() throws -> (ModelContainer, ModelContext, YomiState.Category, Feed, Feed, Article) {
         let container = try ModelContainer(for: Feed.self, Article.self, Category.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = container.mainContext
@@ -36,7 +36,7 @@ final class CategoryMutationTests: XCTestCase {
         XCTAssertEqual(other.category, "Other")
         XCTAssertTrue(article.isSaved)
         let fresh = ModelContext(container)
-        let storedCategories = try fresh.fetch(FetchDescriptor<Category>())
+        let storedCategories = try fresh.fetch(FetchDescriptor<YomiState.Category>())
         XCTAssertEqual(storedCategories.first?.name, "Technology")
         XCTAssertEqual(storedCategories.first?.iconName, "star")
         let storedArticles = try fresh.fetch(FetchDescriptor<Article>())
@@ -79,7 +79,7 @@ final class CategoryMutationTests: XCTestCase {
         XCTAssertEqual(category.iconName, "tag")
         XCTAssertEqual(feed.category, "Tech")
         XCTAssertTrue(article.isRead)
-        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<Category>()).first?.name, "Tech")
+        XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<YomiState.Category>()).first?.name, "Tech")
         try CategoryService().save(category: category, name: "New", iconName: "star", context: context)
         XCTAssertEqual(try ModelContext(container).fetch(FetchDescriptor<Feed>()).first(where: { $0.id == feed.id })?.category, "New")
     }
@@ -90,7 +90,7 @@ final class CategoryMutationTests: XCTestCase {
         let failing = CategoryService(persist: { _ in throw TestError.saveFailed })
         XCTAssertThrowsError(try failing.save(category: nil, name: "New", iconName: "tag", context: context))
         try context.save()
-        XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<Category>()), 1)
+        XCTAssertEqual(try ModelContext(container).fetchCount(FetchDescriptor<YomiState.Category>()), 1)
     }
 
     @MainActor
@@ -101,7 +101,7 @@ final class CategoryMutationTests: XCTestCase {
         XCTAssertEqual(other.category, "Other")
         XCTAssertTrue(article.isSaved)
         let fresh = ModelContext(container)
-        XCTAssertEqual(try fresh.fetchCount(FetchDescriptor<Category>()), 0)
+        XCTAssertEqual(try fresh.fetchCount(FetchDescriptor<YomiState.Category>()), 0)
         XCTAssertEqual(try fresh.fetchCount(FetchDescriptor<Article>()), 1)
         XCTAssertEqual(try fresh.fetch(FetchDescriptor<Feed>()).first(where: { $0.id == feed.id })?.category, "")
     }
@@ -131,7 +131,7 @@ final class CategoryMutationTests: XCTestCase {
         // A later save must not accidentally commit the failed delete.
         try context.save()
         let fresh = ModelContext(container)
-        XCTAssertEqual(try fresh.fetchCount(FetchDescriptor<Category>()), 1)
+        XCTAssertEqual(try fresh.fetchCount(FetchDescriptor<YomiState.Category>()), 1)
         XCTAssertEqual(try fresh.fetch(FetchDescriptor<Feed>()).first(where: { $0.id == feed.id })?.category, "Tech")
     }
     @MainActor
@@ -159,3 +159,4 @@ final class CategoryMutationTests: XCTestCase {
     }
 
 }
+
