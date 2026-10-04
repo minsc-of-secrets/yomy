@@ -147,4 +147,15 @@ final class CategoryMutationTests: XCTestCase {
         XCTAssertEqual(feed.category, "Tech")
     }
 
+    @MainActor
+    func testLegacyEmptyCategoryDoesNotCaptureUncategorizedFeeds() throws {
+        let (container, context, category, feed, _, _) = try fixture()
+        defer { withExtendedLifetime(container) {} }
+        category.name = ""
+        feed.category = ""
+        try context.save()
+        try CategoryService().save(category: category, name: "New", iconName: "tag", context: context)
+        XCTAssertEqual(feed.category, "", "Empty membership is reserved for None")
+    }
+
 }

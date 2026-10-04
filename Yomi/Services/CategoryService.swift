@@ -44,7 +44,7 @@ struct CategoryService {
         let oldIcon = category?.iconName
         // Fetch before mutation so a fetch failure cannot leave a partial rename.
         let feeds: [Feed]
-        if let oldName, oldName != name {
+        if let oldName, !oldName.isEmpty, oldName != name {
             feeds = try context.fetch(FetchDescriptor<Feed>(predicate: #Predicate { $0.category == oldName }))
         } else {
             feeds = []
