@@ -7,6 +7,7 @@ struct CategoryPickerSection: View {
     @Query(sort: \Category.sortOrder) private var categories: [Category]
     @State private var newCategoryName = ""
     @State private var showNewCategoryAlert = false
+    @State private var saveError: String?
 
     var body: some View {
         Section("Category") {
@@ -49,6 +50,12 @@ struct CategoryPickerSection: View {
             }
             .tint(.primary)
         }
+        .onChange(of: categoryNames) { oldNames, newNames in
+            guard !selectedCategory.isEmpty,
+                  !newNames.values.contains(selectedCategory),
+                  let selectedID = oldNames.first(where: { $0.value == selectedCategory })?.key else { return }
+            selectedCategory = newNames[selectedID] ?? ""
+        }
         .alert("New Category", isPresented: $showNewCategoryAlert) {
             TextField("Category name", text: $newCategoryName)
                 .textInputAutocapitalization(.words)
@@ -58,23 +65,30 @@ struct CategoryPickerSection: View {
                 newCategoryName = ""
             }
         }
+        .alert("Could Not Save Category", isPresented: Binding(
+            get: { saveError != nil }, set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
+    }
+
+    private var categoryNames: [PersistentIdentifier: String] {
+        Dictionary(uniqueKeysWithValues: categories.map { ($0.persistentModelID, $0.name) })
     }
 
     private var trimmedNewCategoryName: String {
-        newCategoryName.trimmingCharacters(in: .whitespaces)
+        newCategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func addCategory() {
-        let name = trimmedNewCategoryName
-        guard !name.isEmpty,
-              !categories.contains(where: { $0.name == name }) else {
+        do {
+            let category = try CategoryService().save(category: nil, name: newCategoryName, iconName: "tag", context: context)
+            selectedCategory = category.name
             newCategoryName = ""
-            return
+        } catch {
+            saveError = error.localizedDescription
         }
-        let cat = Category(name: name, sortOrder: categories.count)
-        context.insert(cat)
-        try? context.save()
-        selectedCategory = name
-        newCategoryName = ""
     }
 }
