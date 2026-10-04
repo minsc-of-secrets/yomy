@@ -29,6 +29,27 @@ The name comes from 読み (*yomi*), Japanese for "reading".
 
 Originally forked from [minsc-of-secrets/yomy](https://github.com/minsc-of-secrets/yomy).
 
+## Article-state regression tests
+
+With an Xcode iOS 26 SDK and an available iPhone simulator:
+
+```bash
+bash scripts/test-article-state.sh
+```
+
+The harness stages the app's actual services, models, and widget store in a
+throwaway Swift package, then runs XCTest against an in-memory SwiftData store
+on the simulator. No duplicate service implementation is maintained in tests.
+It covers delayed read actions versus Mark All Read, repeated actions across
+same-URL articles, independent empty URLs, and deletion before deferred writes.
+CI runs the current state tests and builds the app and widget without signing.
+The initial validation also confirmed the Mark All Read test fails against the
+original implementation: [red/green evidence](https://github.com/minsc-of-secrets/yomy/actions/runs/37129326056).
+That historical check is no longer run on every push. For an explicit one-off
+comparison, set `YOMY_BASELINE_REF` to a compatible earlier commit when invoking
+the harness (the historical regression is expected to return a failing test).
+These state tests do not measure or reproduce the UI freeze reported in issue #6.
+
 ## Parser regression tests
 
 On macOS 14+ with Xcode's Swift 5.9+ toolchain:

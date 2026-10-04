@@ -1,0 +1,22 @@
+name: Article state regression tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  article-state:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test production article state transitions
+        run: bash scripts/test-article-state.sh
+      - name: Build app and widget without signing
+        run: >-
+          xcodebuild -project Yomi.xcodeproj -scheme Yomi
+          -destination 'generic/platform=iOS Simulator'
+          -configuration Debug build CODE_SIGNING_ALLOWED=NO
