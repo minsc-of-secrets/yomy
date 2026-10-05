@@ -21,7 +21,7 @@ final class OPMLManager: NSObject {
 
         """
 
-        let grouped = Dictionary(grouping: feeds, by: \.category)
+        let grouped = Dictionary(grouping: feeds.filter(\.isSubscribed), by: \.category)
         for (category, categoryFeeds) in grouped.sorted(by: { $0.key < $1.key }) {
             xml += "    <outline text=\"\(category.xmlEscaped)\" title=\"\(category.xmlEscaped)\">\n"
             for feed in categoryFeeds {

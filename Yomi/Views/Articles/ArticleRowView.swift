@@ -14,6 +14,16 @@ struct ArticleRowView: View {
 
     var body: some View {
         Group {
+            // A row may receive one last body update while its enclosing detail
+            // screen or sheet animates away after a cascading unsubscribe.
+            if article.modelContext === context && !article.isDeleted {
+                liveContent
+            }
+        }
+    }
+
+    private var liveContent: some View {
+        Group {
             if featured {
                 featuredLayout
             } else {
@@ -24,8 +34,11 @@ struct ArticleRowView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .opacity(article.isRead ? 0.7 : 1.0)
         .task(id: article.url) {
-            guard article.imageURL == nil, !article.url.isEmpty else { return }
+            guard article.modelContext === context, !article.isDeleted,
+                  article.imageURL == nil, !article.url.isEmpty else { return }
             if let url = await OGImageFetcher.shared.fetch(articleURL: article.url) {
+                guard !Task.isCancelled, article.modelContext === context,
+                      !article.isDeleted else { return }
                 article.imageURL = url
                 try? context.save()
             }
