@@ -4,11 +4,11 @@ import SwiftData
 struct CategoryEditView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Category.sortOrder) private var categories: [Category]
 
     let category: Category?
 
     @State private var name: String
+    @State private var saveError: String?
     @State private var iconName: String
     @FocusState private var nameFocused: Bool
 
@@ -77,10 +77,16 @@ struct CategoryEditView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done", systemImage: "checkmark") {
                     save()
-                    dismiss()
                 }
                 .disabled(trimmedName.isEmpty)
             }
+        }
+        .alert("Could Not Save Category", isPresented: Binding(
+            get: { saveError != nil }, set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK", role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
         }
         .onAppear {
             if !isEditing {
@@ -90,19 +96,15 @@ struct CategoryEditView: View {
     }
 
     private var trimmedName: String {
-        name.trimmingCharacters(in: .whitespaces)
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func save() {
-        let newName = trimmedName
-        guard !newName.isEmpty else { return }
-        if let category {
-            category.name = newName
-            category.iconName = iconName
-        } else {
-            let cat = Category(name: newName, sortOrder: categories.count, iconName: iconName)
-            context.insert(cat)
+        do {
+            try CategoryService().save(category: category, name: name, iconName: iconName, context: context)
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
         }
-        try? context.save()
     }
 }

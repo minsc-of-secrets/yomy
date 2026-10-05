@@ -130,7 +130,7 @@ A gear icon on the Latest tab's NavBar opens `SettingsView` as a sheet (Madelein
 
 - `Feed`, `Article`, `Category` are `@Model` types in `Yomi/Models/`.
 - `Feed.articles` uses `@Relationship(deleteRule: .cascade, inverse: \Article.feed)`.
-- `feed.category` is a plain `String` (not a relationship to `Category`). The `Category` model exists only so users can manage the list of categories. Renaming a `Category` does not retroactively update existing feeds.
+- `feed.category` is a plain `String` (not a relationship to `Category`). The `Category` model exists only so users can manage the list of categories. CategoryService saves category renames and matching feed strings together; deleting the last category with a name moves matching feeds to None (`""`).
 - The "General" category is seeded once on first launch via a UserDefaults flag in `YomiApp.swift`. It can then be deleted by the user like any other category.
 
 ---
