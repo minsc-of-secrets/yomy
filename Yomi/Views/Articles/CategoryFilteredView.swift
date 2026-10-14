@@ -3,8 +3,9 @@ import SwiftData
 
 struct CategoryFilteredView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Article.publishedAt, order: .reverse) private var articles: [Article]
-    @Query private var feeds: [Feed]
+    @Query(filter: #Predicate<Article> { $0.feed?.isSubscribed == true },
+           sort: \Article.publishedAt, order: .reverse) private var articles: [Article]
+    @Query(filter: #Predicate<Feed> { $0.isSubscribed }) private var feeds: [Feed]
 
     let category: Category
 

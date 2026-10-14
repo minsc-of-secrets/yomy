@@ -76,6 +76,8 @@ struct AddFeedView: View {
         do {
             let _ = try await FeedService.shared.addFeed(url: urlText, category: selectedCategory, context: context)
             dismiss()
+        } catch FeedService.AdditionError.alreadySubscribed {
+            errorMessage = FeedService.AdditionError.alreadySubscribed.localizedDescription
         } catch {
             errorMessage = "Failed to fetch feed: \(error.localizedDescription)"
         }

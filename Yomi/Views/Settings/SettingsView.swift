@@ -6,7 +6,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Category.sortOrder) private var categories: [Category]
-    @Query private var feeds: [Feed]
+    @Query(filter: #Predicate<Feed> { $0.isSubscribed }) private var feeds: [Feed]
 
     @State private var showOPMLImporter = false
     @State private var showOPMLExporter = false

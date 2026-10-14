@@ -3,21 +3,58 @@ import SwiftData
 
 struct FeedDetailView: View {
     let feed: Feed
+    private let originalTitle: String
     @Environment(\.modelContext) private var context
 
     @State private var isRefreshing = false
     @State private var selectedArticle: Article?
     @State private var showEditFeed = false
-    @State private var showDeleteConfirmation = false
+    @State private var unsubscribeRequest: FeedUnsubscribeRequest?
+    @State private var didUnsubscribe = false
     @Environment(\.dismiss) private var dismiss
 
-    private var sortedArticles: [Article] {
-        feed.articles.sorted { $0.publishedAt > $1.publishedAt }
+    init(feed: Feed) {
+        self.feed = feed
+        if feed.modelContext != nil && !feed.isDeleted {
+            self.originalTitle = feed.title.isEmpty ? feed.url : feed.title
+        } else {
+            self.originalTitle = "Feed"
+        }
+    }
+
+    private var isAvailable: Bool {
+        !didUnsubscribe && feed.modelContext === context && !feed.isDeleted && feed.isSubscribed
+    }
+
+    private var displayTitle: String {
+        guard isAvailable else { return originalTitle }
+        return feed.title.isEmpty ? feed.url : feed.title
     }
 
     var body: some View {
+        Group {
+            if isAvailable {
+                articleList
+            } else {
+                Color.clear
+            }
+        }
+        .navigationTitle(displayTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $unsubscribeRequest, onDismiss: {
+            // Pop only after the confirmation sheet has finished dismissing.
+            // Cancel and failed saves leave the detail screen in place.
+            if didUnsubscribe { dismiss() }
+        }) { request in
+            UnsubscribeFeedView(request: request) { didUnsubscribe = true }
+        }
+    }
+
+    private var articleList: some View {
         // 記事タップで body が再評価されるため、ソートは 1 回に抑える。
-        let sorted = sortedArticles
+        let sorted = feed.articles
+            .filter { $0.modelContext === context && !$0.isDeleted }
+            .sorted { $0.publishedAt > $1.publishedAt }
 
         return List(sorted) { article in
             Button {
@@ -34,8 +71,6 @@ struct FeedDetailView: View {
         .refreshable {
             try? await FeedService.shared.refresh(feed: feed, context: context)
         }
-        .navigationTitle(feed.title.isEmpty ? feed.url : feed.title)
-        .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $selectedArticle) { article in
             NavigationStack {
                 ArticleWebView(article: article)
@@ -61,9 +96,10 @@ struct FeedDetailView: View {
                         Label("Edit Feed", systemImage: "pencil")
                     }
                     Button(role: .destructive) {
-                        showDeleteConfirmation = true
+                        guard isAvailable else { return }
+                        unsubscribeRequest = FeedUnsubscribeRequest(feed: feed)
                     } label: {
-                        Label("Delete Feed", systemImage: "trash")
+                        Label("Unsubscribe", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -72,15 +108,6 @@ struct FeedDetailView: View {
         }
         .sheet(isPresented: $showEditFeed) {
             FeedManageView(feed: feed)
-        }
-        .alert("Delete Feed?", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                try? FeedService.shared.deleteFeed(feed, context: context)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("\"\(feed.title.isEmpty ? feed.url : feed.title)\" and all its articles will be removed.")
         }
         .overlay {
             if sorted.isEmpty {

@@ -24,12 +24,14 @@ private struct SearchResultsView: View {
         self.query = query
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
-            _articles = Query(sort: \Article.publishedAt, order: .reverse)
+            _articles = Query(filter: #Predicate<Article> { $0.feed?.isSubscribed == true || $0.isSaved },
+                              sort: \Article.publishedAt, order: .reverse)
         } else {
             _articles = Query(
                 filter: #Predicate<Article> { article in
-                    article.title.localizedStandardContains(trimmed) ||
-                    article.summary.localizedStandardContains(trimmed)
+                    (article.feed?.isSubscribed == true || article.isSaved) &&
+                    (article.title.localizedStandardContains(trimmed) ||
+                     article.summary.localizedStandardContains(trimmed))
                 },
                 sort: \Article.publishedAt,
                 order: .reverse

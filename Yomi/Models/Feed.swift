@@ -8,6 +8,9 @@ final class Feed {
     var title: String
     var siteURL: String
     var category: String
+    // An archived source owns retained saved articles but is no longer a subscription.
+    // The inline default lets existing stores migrate without removing any data.
+    var isSubscribed: Bool = true
     var fetchedAt: Date?
     var createdAt: Date
 

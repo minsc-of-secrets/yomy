@@ -3,9 +3,10 @@ import SwiftData
 
 struct FeedsView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Feed.createdAt) private var feeds: [Feed]
+    @Query(filter: #Predicate<Feed> { $0.isSubscribed }, sort: \Feed.createdAt) private var feeds: [Feed]
 
     @State private var showAddFeed = false
+    @State private var feedToUnsubscribe: FeedUnsubscribeRequest?
 
     private var groupedFeeds: [(String, [Feed])] {
         let groups = Dictionary(grouping: feeds, by: \.category)
@@ -24,11 +25,13 @@ struct FeedsView: View {
                                 FeedRowView(feed: feed)
                             }
                             .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    try? FeedService.shared.deleteFeed(feed, context: context)
+                                Button {
+                                    guard feed.modelContext === context, !feed.isDeleted else { return }
+                                    feedToUnsubscribe = FeedUnsubscribeRequest(feed: feed)
                                 } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label("Unsubscribe", systemImage: "trash")
                                 }
+                                .tint(.red)
                             }
                         }
                     }
@@ -50,6 +53,9 @@ struct FeedsView: View {
             }
             .sheet(isPresented: $showAddFeed) {
                 AddFeedView()
+            }
+            .sheet(item: $feedToUnsubscribe) { request in
+                UnsubscribeFeedView(request: request)
             }
             .overlay {
                 if feeds.isEmpty {
