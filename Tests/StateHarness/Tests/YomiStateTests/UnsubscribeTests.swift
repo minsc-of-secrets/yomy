@@ -267,4 +267,49 @@ final class UnsubscribeTests: XCTestCase {
             ParsedArticle(guid: $0, url: "https://example.com/\($0)", title: $0, summary: "", imageURL: "https://example.com/image.png", author: "", publishedAt: Date())
         })
     }
+
+    // MARK: - Purging what an unsubscribe kept
+
+    @MainActor
+    func testPurgeRemovesUnsavedArchivedArticleAndEmptySource() throws {
+        let (container, context, feed, saved, _) = try fixture()
+        let service = FeedService()
+        try service.unsubscribe(feed, keepSavedArticles: true, context: context)
+        saved.isSaved = false
+        saved.savedAt = nil
+        try context.save()
+        try service.purgeUnsavedArchivedArticles(context: context)
+        let reopened = ModelContext(container)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Article>()), 0)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Feed>()), 0)
+    }
+
+    @MainActor
+    func testPurgeKeepsStillSavedArticlesAndTheirSource() throws {
+        let (container, context, feed, saved, _) = try fixture()
+        let second = Article(guid: "second", url: "https://example.com/second", title: "Second", publishedAt: Date(), feed: feed)
+        second.isSaved = true
+        second.savedAt = Date()
+        context.insert(second)
+        try context.save()
+        let service = FeedService()
+        try service.unsubscribe(feed, keepSavedArticles: true, context: context)
+        second.isSaved = false
+        second.savedAt = nil
+        try context.save()
+        try service.purgeUnsavedArchivedArticles(context: context)
+        let reopened = ModelContext(container)
+        let articles = try reopened.fetch(FetchDescriptor<Article>())
+        XCTAssertEqual(articles.map(\.id), [saved.id])
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Feed>()), 1)
+    }
+
+    @MainActor
+    func testPurgeLeavesSubscribedFeedsAlone() throws {
+        let (container, context, _, _, _) = try fixture()
+        try FeedService().purgeUnsavedArchivedArticles(context: context)
+        let reopened = ModelContext(container)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Article>()), 2)
+        XCTAssertEqual(try reopened.fetchCount(FetchDescriptor<Feed>()), 1)
+    }
 }

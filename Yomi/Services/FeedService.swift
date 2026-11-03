@@ -383,6 +383,24 @@ final class FeedService {
         scheduleWidgetSnapshotUpdate(context: context)
     }
 
+    /// Removes what an unsubscribe kept but nothing holds on to any more: articles of
+    /// archived sources that are no longer saved, then archived sources left empty.
+    /// Run at launch, when no delayed save/unsave from this session can still be pending.
+    func purgeUnsavedArchivedArticles(context: ModelContext) throws {
+        let unsaved = try context.fetch(FetchDescriptor<Article>(
+            predicate: #Predicate { $0.feed?.isSubscribed == false && $0.isSaved == false }
+        ))
+        for article in unsaved { context.delete(article) }
+        let archived = try context.fetch(FetchDescriptor<Feed>(
+            predicate: #Predicate { $0.isSubscribed == false }
+        ))
+        for feed in archived where feed.articles.allSatisfy({ $0.isDeleted || !$0.isSaved }) {
+            context.delete(feed)
+        }
+        guard context.hasChanges else { return }
+        try context.save()
+    }
+
     // Explicit destructive API retained for callers that intend to remove all data.
     func deleteFeed(_ feed: Feed, context: ModelContext) throws {
         try unsubscribe(feed, keepSavedArticles: false, context: context)

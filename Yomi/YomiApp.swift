@@ -13,6 +13,7 @@ struct YomiApp: App {
         }
         seedDefaultCategoryIfNeeded()
         backfillSavedAtIfNeeded()
+        try? FeedService.shared.purgeUnsavedArchivedArticles(context: ModelContext(container))
         BackgroundRefreshService.register(container: container)
         BackgroundRefreshService.schedule()
     }
